@@ -185,16 +185,22 @@ loop:
 
     mov     rcx, [rbp + (x - data) + rax * 8]
     add     rcx, [xdir]
-    add     rcx, COLS
-    jb      ok0
-    jge     o1
-    sub     rcx, COLS
-    jmp     ok0
-o1:
-    sub     rcx, COLS
-ok0:
-    mov     [rbp + (x - data) + rbx * 8], rcx
 
+    ; - 1 Check the left boundary (Is X < 0?)
+    cmp     rcx, 0
+    jge     .check_xmax        ; If X is 0 or greater, move to the next check
+    mov     rcx, COLS - 1      ; If X is negative, force it to the right edge
+    jmp     .x_done
+
+.check_xmax:
+    ; - 2 Check the right boundary (Is X >= COLS?)
+    cmp     rcx, COLS
+    jl      .x_done            ; If X is less than COLS, we are good!
+    mov     rcx, 0             ; If X is too high, force it to the left edge
+
+.x_done:
+
+    mov     [rbp + (x - data) + rbx * 8], rcx
     mov     rdx, [rbp + (y - data) + rax * 8]
     add     rdx, [ydir]
     cmp     rdx, ROWS
