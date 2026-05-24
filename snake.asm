@@ -18,9 +18,9 @@ showcursor:     db 27, '[?25h', 0
 cursortotop:    db 27, '[%iA', 0
 cursortotop2:   db 27, '[%iF', 0
 gameoverstr:    db 27, '[%iB', 27, '[%iC Game Over! ', 0
-tailstr:        db 27, '[%iB', 27, '[%iC·', 0
+tailstr:        db 27, '[%iB', 27, '[%iC.', 0
 headstr:        db 27, '[%iB', 27, '[%iC๏', 0
-applestr:       db 27, '[%iB', 27, '[%iC🍎', 0
+applestr:       db 27, '[%iB', 27, '[%iC*', 0
 
 section .bss
 data:   resb 1
@@ -56,7 +56,7 @@ init:
     mov     rcx, 64
     rep     movsb
 
-    and     word[newt +3 * 8], ~(0x0100 | 0x0008)  ; ICANON, ECHO
+    and     dword [newt + 12], ~(0x0002 | 0x0008)  ; ICANON, ECHO
     mov     rdi, 0
     mov     rsi, 0
     mov     rdx, newt
@@ -86,18 +86,18 @@ render_table:
 
     ; top line
     mov     rdi, buf
-    mov     rax, '⌈'
+    mov     rax, '┌'
     stosd
     dec     rdi
     mov     rcx, COLS
-    mov     rax, '‾'
+    mov     rax, '─'
 _r0:
     stosd
     dec     rdi
     dec     rcx
     jnz     _r0
 
-    mov     rax, '⌉'
+    mov     rax, '┐'
     stosd
     mov     byte [rdi - 1], 10 ; new line
 
@@ -105,31 +105,31 @@ _r0:
     ; mid line
     mov     rsi, ROWS
 _r1:
-    mov    rax, '⟦'
+    mov    rax, '│'
     stosd
     dec     rdi
     mov     rcx, COLS
     mov     al, '.'
     rep     stosw
-    mov     eax, '⟧'
+    mov     eax, '│'
     stosd
     mov     byte [rdi - 1], 10
     dec     rsi
     jnz     _r1
 
     ; bottom line
-    mov     rax, '⌊'
+    mov     rax, '└'
     stosd
     dec     rdi
     mov     rcx, COLS
-    mov     al, '_'
+    mov     rax, '─'
 _r2:
     stosd
     dec     rdi
     dec     rcx
     jnz     _r2
 
-    mov     rax, '⌋'
+    mov     rax, '┘'
     stosd
     mov     byte [rdi - 1], 10
 
@@ -162,6 +162,58 @@ main_loop:
 
 loop:
     lea     rbp, [data]
+
+    cmp     qword [applex], 0
+    jge     apple_exit
+
+    ; Create new apple
+    call    rand
+    xor     rdx, rdx
+    mov     rbx, COLS
+    div     rbx
+    mov     [applex], rdx
+    call    rand
+    xor     rdx, rdx
+    mov     rbx, ROWS
+    div     rbx
+    mov     [appley], rdx
+
+    ; new apple on the snake?
+    mov     rdi, [head]
+    mov     rax, [applex]
+    mov     rbx, [appley]
+    mov     rsi, [tail]
+q3:
+    cmp     rsi, [head]
+    jz      q5
+    cmp     [rbp + (x - data) + rsi * 8], rax
+    jnz     q4
+    cmp     [rbp + (y - data) + rsi * 8], rbx
+    jnz     q4
+    mov     qword [applex], -1
+q4:
+    inc     rsi
+    and     rsi, 1023
+    jmp     q3
+q5:
+
+    ; Draw apple
+    cmp     qword [applex], 0
+    jl      apple_exit
+    mov     rdi, applestr
+    mov     rsi, [appley]
+    mov     rdx, [applex]
+    inc     rsi
+    inc     rdx
+    call    printf
+    mov     rdi, cursortotop2
+    mov     rsi, [appley]
+    inc     rsi
+    call    printf
+
+
+apple_exit:
+
     ; Clear snake tail
     mov     rbx, [tail]
     mov     rdi, tailstr
@@ -176,6 +228,29 @@ loop:
     mov     rsi, [rbp + (y - data) + rbx * 8]
     inc     rsi
     call    printf
+
+    ; eat apple?
+    mov     rbx, [head]
+    mov     rax, [rbp + (x - data) + rbx * 8]
+    cmp     eax, [applex]
+    jnz     not_on_apple
+    mov     rax, [rbp + (y - data) + rbx * 8]
+    cmp     eax, [appley]
+    jnz     not_on_apple
+
+    mov     qword [applex], -1
+    jmp     apple_is_eaten
+
+not_on_apple:
+
+.no_eat:
+    ; Move snake tail
+    mov     rbx, [tail]
+    inc     rbx
+    and     rbx, 1023
+    mov     [tail], rbx
+
+apple_is_eaten:
 
     ; Move snake head
     mov     rbx, [head]
@@ -270,6 +345,35 @@ r5:
     jz      exit_fn
     cmp     al, 'q'
     je      exit_fn
+
+    cmp     al, 'a'
+    jnz     not_a
+    cmp     qword [xdir], 1
+    jz      not_a
+    mov     qword [xdir], -1
+    mov     qword [ydir], 0
+not_a:
+    cmp     al, 'd'
+    jnz     not_d
+    cmp     qword [xdir], -1
+    jz      not_d
+    mov     qword [xdir], 1
+    mov     qword [ydir], 0
+not_d:
+    cmp     al, 's'
+    jnz     not_s
+    cmp     qword [ydir], -1
+    jz      not_s
+    mov     qword [xdir], 0
+    mov     qword [ydir], 1
+not_s:
+    cmp     al, 'w'
+    jnz     not_w
+    cmp     qword [ydir], 1
+    jz      not_w
+    mov     qword [xdir], 0
+    mov     qword [ydir], -1
+not_w:
 
 nokey:
     jmp     loop
