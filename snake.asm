@@ -110,7 +110,7 @@ _r1:
     dec     rdi
     mov     rcx, COLS
     mov     al, '.'
-    rep     stosw
+    rep     stosb
     mov     eax, '│'
     stosd
     mov     byte [rdi - 1], 10
